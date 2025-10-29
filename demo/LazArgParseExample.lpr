@@ -1,7 +1,3 @@
-# LazArgParse
-Lazarus argument parser
-
-```pascal
 program LazArgParseExample;
 
 {$mode objfpc}{$H+}
@@ -51,25 +47,11 @@ begin
     on E: Exception do
     begin
       Writeln(E.Message);
-      // Print help
-      Parser.PrintHelp;
+      Parser.PrintHelp;   // Print help
     end;
   end;
   Parser.Free;
   readln;
 end.
-```
 
-Output
 
-```
-ArgumentParser error: Argument required: filename
-Usage: example [options]
-An example of using argparse for Delphi.
-
-Options:
-  filename             The name of the file to process
-  -c, --count          Number of repetitions
-  -m, --mode           Operating mode (fast|safe)
-  -v, --verbose        Detailed output
-```

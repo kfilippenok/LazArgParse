@@ -1,22 +1,25 @@
-unit ArgParse;
+unit LazArgParse;
+
+{$mode objfpc}{$H+}
+{$SCOPEDENUMS ON}
 
 interface
 
 uses
-  System.SysUtils, System.Classes, System.Generics.Collections;
+  SysUtils, Classes, fgl, Types;
 
 type
-  {$SCOPEDENUMS ON}
 
   TArgAction = (
-  /// <summary>
-  /// Expects a value after the flag (for example, --count 5).
-  /// </summary>
-  Store,
-  /// <summary>
-  /// A boolean flag that is set to True if present (for example, --verbose).
-  /// </summary>
-  Flag);
+    /// <summary>
+    /// Expects a value after the flag (for example, --count 5).
+    /// </summary>
+    Store,
+    /// <summary>
+    /// A boolean flag that is set to True if present (for example, --verbose).
+    /// </summary>
+    Flag
+  );
 
   TArgType = (AsString, AsInteger, AsBoolean);
 
@@ -32,29 +35,29 @@ type
     Action: TArgAction;
     ArgType: TArgType;
     DefaultValue: string;
-    Choices: TArray<string>;
+    Choices: TStringDynArray;
     constructor Create(const AName: string);
   end;
 
   TNamespace = class
   private
-    FValues: TDictionary<string, TArray<string>>;
+    FValues: specialize TFPGMap<string, TStringDynArray>;
   public
     constructor Create;
     destructor Destroy; override;
-    procedure SetValue(const AName: string; const AValues: TArray<string>);
+    procedure SetValue(const AName: string; const AValues: TStringDynArray);
     function Has(const AName: string): Boolean;
     function GetAsString(const AName: string; const ADefault: string = ''): string;
     function GetAsInteger(const AName: string; ADefault: Integer = 0): Integer;
     function GetAsBoolean(const AName: string; ADefault: Boolean = False): Boolean;
-    function GetAll(const AName: string): TArray<string>;
+    function GetAll(const AName: string): TStringDynArray;
   end;
 
   TArgumentParser = class
   private
     FProgName: string;
     FDescription: string;
-    FArgs: TObjectList<TArgument>;
+    FArgs: specialize TFPGObjectList<TArgument>;
     FParamArgs: TNamespace;
     procedure RaiseError(const Msg: string);
     function FindByFlag(const AFlag: string): TArgument;
@@ -102,11 +105,11 @@ type
     /// <param name="AChoices">
     /// An array of valid values. If specified, the input is checked for matching one of the elements.
     /// </param>
-    function AddArgument(const AName: string; const AShort: string = ''; const ALong: string = ''; const AHelp: string = ''; const ARequired: Boolean = False; const AAction: TArgAction = TArgAction.Store; const AArgType: TArgType = TArgType.AsString; const ADefault: string = ''; const AChoices: TArray<string> = []): TArgument;
+    function AddArgument(const AName: string; const AShort: string = ''; const ALong: string = ''; const AHelp: string = ''; const ARequired: Boolean = False; const AAction: TArgAction = TArgAction.Store; const AArgType: TArgType = TArgType.AsString; const ADefault: string = ''; const AChoices: TStringDynArray = Default(TStringDynArray)): TArgument;
     /// <summary>
     /// Parsing the parameter list. Returns a separate object
     /// </summary>
-    function ParseArgs(const ARawArgs: TArray<string>): TNamespace;
+    function ParseArgs(const ARawArgs: TStringDynArray): TNamespace;
     /// <summary>
     /// Gives access to the program run parameters (ParamStr/ParamCount)
     /// </summary>
@@ -140,7 +143,7 @@ end;
 constructor TNamespace.Create;
 begin
   inherited Create;
-  FValues := TDictionary<string, TArray<string>>.Create;
+  FValues := specialize TFPGMap<string, TStringDynArray>.Create;
 end;
 
 destructor TNamespace.Destroy;
@@ -149,26 +152,27 @@ begin
   inherited;
 end;
 
-procedure TNamespace.SetValue(const AName: string; const AValues: TArray<string>);
+procedure TNamespace.SetValue(const AName: string; const AValues: TStringDynArray);
 begin
-  FValues.AddOrSetValue(AName, AValues);
+  FValues.AddOrSetData(AName, AValues);
 end;
 
 function TNamespace.Has(const AName: string): Boolean;
 begin
-  Result := FValues.ContainsKey(AName);
+  Result := FValues.IndexOf(AName) <> -1;
 end;
 
-function TNamespace.GetAll(const AName: string): TArray<string>;
+function TNamespace.GetAll(const AName: string): TStringDynArray;
 begin
-  if not FValues.TryGetValue(AName, Result) then
+  if not FValues.TryGetData(AName, Result) then
     Result := [];
 end;
 
 function TNamespace.GetAsBoolean(const AName: string; ADefault: Boolean): Boolean;
+var
+  Value: TStringDynArray;
 begin
-  var Value: TArray<string>;
-  if FValues.TryGetValue(AName, Value) then
+  if FValues.TryGetData(AName, Value) then
   begin
     if Length(Value) = 0 then
       Exit(True);
@@ -179,9 +183,10 @@ begin
 end;
 
 function TNamespace.GetAsInteger(const AName: string; ADefault: Integer): Integer;
+var
+  Value: TStringDynArray;
 begin
-  var Value: TArray<string>;
-  if FValues.TryGetValue(AName, Value) and (Length(Value) > 0) then
+  if FValues.TryGetData(AName, Value) and (Length(Value) > 0) then
   try
     Result := Value[0].ToInteger;
   except
@@ -192,9 +197,10 @@ begin
 end;
 
 function TNamespace.GetAsString(const AName: string; const ADefault: string): string;
+var
+  Value: TStringDynArray;
 begin
-  var Value: TArray<string>;
-  if FValues.TryGetValue(AName, Value) and (Length(Value) > 0) then
+  if FValues.TryGetData(AName, Value) and (Length(Value) > 0) then
     Result := Value[0]
   else
     Result := ADefault;
@@ -203,12 +209,14 @@ end;
 { TArgumentParser }
 
 constructor TArgumentParser.Create(const AProgName: string);
+type
+  TArgumentList = specialize TFPGObjectList<TArgument>;
 begin
   inherited Create;
   FParamArgs := nil;
   FProgName := AProgName;
   FDescription := '';
-  FArgs := TObjectList<TArgument>.Create;
+  FArgs := TArgumentList.Create;
 end;
 
 destructor TArgumentParser.Destroy;
@@ -228,7 +236,7 @@ begin
   FDescription := ADesc;
 end;
 
-function TArgumentParser.AddArgument(const AName: string; const AShort: string; const ALong: string; const AHelp: string; const ARequired: Boolean; const AAction: TArgAction; const AArgType: TArgType; const ADefault: string; const AChoices: TArray<string>): TArgument;
+function TArgumentParser.AddArgument(const AName: string; const AShort: string; const ALong: string; const AHelp: string; const ARequired: Boolean; const AAction: TArgAction; const AArgType: TArgType; const ADefault: string; const AChoices: TStringDynArray): TArgument;
 begin
   Result := TArgument.Create(AName);
   FArgs.Add(Result);
@@ -248,8 +256,10 @@ begin
 end;
 
 function TArgumentParser.FindByFlag(const AFlag: string): TArgument;
+var
+  Arg: TArgument;
 begin
-  for var Arg in FArgs do
+  for Arg in FArgs do
   begin
     if (Arg.ShortName <> '') and (Arg.ShortName = AFlag) then
       Exit(Arg);
@@ -259,21 +269,27 @@ begin
   Result := nil;
 end;
 
-function TArgumentParser.ParseArgs(const ARawArgs: TArray<string>): TNamespace;
+function TArgumentParser.ParseArgs(const ARawArgs: TStringDynArray): TNamespace;
+var
+  Arg     : TArgument;
+  ArgValue: String;
+  Choise  : String;
+  Token   : String;
+  i       : integer = 0;
+  Found   : Boolean;
 begin
   Result := TNamespace.Create;
   try
-    for var Arg in FArgs do
+    for Arg in FArgs do
       if Arg.DefaultValue <> '' then
         Result.SetValue(Arg.Name, [Arg.DefaultValue]);
 
-    var i: integer := 0;
     while i < Length(ARawArgs) do
     begin
-      var Token := ARawArgs[i];
+      Token := ARawArgs[i];
       if IsFlag(Token) then
       begin
-        var Arg := FindByFlag(Token);
+        Arg := FindByFlag(Token);
         if Arg = nil then
           RaiseError('Unknown option: ' + Token);
 
@@ -288,13 +304,13 @@ begin
         if i + 1 >= Length(ARawArgs) then
           RaiseError('Option ' + Token + ' requires a value');
 
-        var ArgValue := ARawArgs[i + 1];
+        ArgValue := ARawArgs[i + 1];
 
         // validate choices
         if Length(Arg.Choices) > 0 then
         begin
-          var Found := False;
-          for var Choise in Arg.Choices do
+          Found := False;
+          for Choise in Arg.Choices do
             if Choise = ArgValue then
             begin
               Found := True;
@@ -314,7 +330,7 @@ begin
             end;
           TArgType.AsBoolean:
             begin
-              if not TArray.Contains<string>(['true', 'false', '1', '0'], ArgValue.ToLower) then
+              if (Pos(ArgValue.ToLower, 'true' + 'false' + '1' + '0') = -1) then
                 RaiseError(Format('Value for %s must be Boolean', [Token]));
             end;
         end;
@@ -326,8 +342,8 @@ begin
       else
       begin
         // positional arguments: match against first argument with no flags
-        var Found := False;
-        for var Arg in FArgs do
+        Found := False;
+        for Arg in FArgs do
           if (Arg.ShortName = '') and (Arg.LongName = '') then
             if not Result.Has(Arg.Name) then
             begin
@@ -342,12 +358,12 @@ begin
     end;
 
     // check required
-    for var Arg in FArgs do
+    for Arg in FArgs do
       if Arg.Required and not Result.Has(Arg.Name) then
         RaiseError('Argument required: ' + Arg.Name);
 
     // For flags with action store_true that were not set, put false
-    for var Arg in FArgs do
+    for Arg in FArgs do
       if (Arg.Action = TArgAction.Flag) and not Result.Has(Arg.Name) then
         Result.SetValue(Arg.Name, ['0']);
   except
@@ -357,27 +373,33 @@ begin
 end;
 
 function TArgumentParser.GetParamArgs: TNamespace;
+var
+  Args: TStringDynArray;
+  i   : Integer;
 begin
+  Args := [];
   if not Assigned(FParamArgs) then
   begin
-    var Args: TArray<string>;
-    for var i := 1 to ParamCount do
-      Args := Args + [ParamStr(i)];
+    for i := 1 to ParamCount do
+      Args := Concat(Args, [ParamStr(i)]);
     FParamArgs := ParseArgs(Args);
   end;
   Result := FParamArgs;
 end;
 
 procedure TArgumentParser.PrintHelp;
+var
+  Arg  : TArgument;
+  Flags: String;
 begin
   Writeln('Usage: ', FProgName, ' [options]');
   if FDescription <> '' then
     Writeln(FDescription);
   Writeln;
   Writeln('Options:');
-  for var Arg in FArgs do
+  for Arg in FArgs do
   begin
-    var Flags := '';
+    Flags := '';
     if Arg.ShortName <> '' then
       Flags := Flags + Arg.ShortName;
     if Arg.LongName <> '' then
