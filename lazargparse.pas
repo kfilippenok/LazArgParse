@@ -391,6 +391,7 @@ procedure TArgumentParser.PrintHelp;
 var
   Arg  : TArgument;
   Flags: String;
+  Help : String;
 begin
   Writeln('Usage: ', FProgName, ' [options]');
   if FDescription <> '' then
@@ -410,7 +411,10 @@ begin
     end;
     if Flags = '' then
       Flags := Arg.Name;
-    Writeln(Format('  %-20s %s', [Flags, Arg.Help]));
+    Help := Arg.Help;
+    if Length(Arg.Choices) > 0 then
+      Help := Help + ' (' + string.Join('|', Arg.Choices) + ')';
+    Writeln(Format('  %-20s %s', [Flags, Help]));
   end;
 end;
 
