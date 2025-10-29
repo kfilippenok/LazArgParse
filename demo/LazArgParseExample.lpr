@@ -44,10 +44,15 @@ begin
     for i := 1 to count do
       Writeln(Format('Processing %d/%d file %s in mode %s...', [i, count, filename, mode]));
   except
-    on E: Exception do
+    on E: EArgumentParserError do
     begin
       Writeln(E.Message);
       Parser.PrintHelp(True);   // Print help
+    end;
+    on E: Exception do
+    begin
+      Writeln(E.Message);
+      ReadLn;
     end;
   end;
   Parser.Free;
