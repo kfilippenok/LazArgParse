@@ -27,30 +27,32 @@ type
 
   TArgument = class
   public
-    Name: string;           // logical name, e.g. "verbose" or "filename"
-    ShortName: string;      // e.g. "-v"
-    LongName: string;       // e.g. "--verbose"
-    Help: string;
-    Required: Boolean;
-    Action: TArgAction;
-    ArgType: TArgType;
+    Name        : string;      // logical name, e.g. "verbose" or "filename"
+    ShortName   : string;      // e.g. "-v"
+    LongName    : string;      // e.g. "--verbose"
+    Help        : string;
+    Required    : Boolean;
+    Action      : TArgAction;
+    ArgType     : TArgType;
     DefaultValue: string;
-    Choices: TStringDynArray;
+    Choices     : TStringDynArray;
     constructor Create(const AName: string);
   end;
 
   TNamespace = class
   private
-    FValues: specialize TFPGMap<string, TStringDynArray>;
+    type
+      _TStringMap = specialize TFPGMap<string, string>;
+  private
+    FValues: _TStringMap;
   public
     constructor Create;
     destructor Destroy; override;
-    procedure SetValue(const AName: string; const AValues: TStringDynArray);
     function Has(const AName: string): Boolean;
+    procedure SetValue(const AName: string; const AValues: string);
     function GetAsString(const AName: string; const ADefault: string = ''): string;
     function GetAsInteger(const AName: string; ADefault: Integer = 0): Integer;
     function GetAsBoolean(const AName: string; ADefault: Boolean = False): Boolean;
-    function GetAll(const AName: string): TStringDynArray;
   end;
 
   IArgumentParser = interface
@@ -109,10 +111,13 @@ type
 
   TArgumentParser = class(TInterfacedObject, IArgumentParser)
   private
-    FProgName: string;
+    type
+      _TArgumentList = specialize TFPGObjectList<TArgument>;
+  private
+    FProgName   : string;
     FDescription: string;
-    FArgs: specialize TFPGObjectList<TArgument>;
-    FParamArgs: TNamespace;
+    FArgs       : _TArgumentList;
+    FParamArgs  : TNamespace;
     procedure RaiseError(const Msg: string);
     function FindByFlag(const AFlag: string): TArgument;
     function IsFlag(const S: string): Boolean;
@@ -181,15 +186,15 @@ implementation
 constructor TArgument.Create(const AName: string);
 begin
   inherited Create;
-  Name := AName;
-  ShortName := '';
-  LongName := '';
-  Help := '';
-  Required := False;
-  Action := TArgAction.Store;
-  ArgType := TArgType.AsString;
+  Name         := AName;
+  ShortName    := '';
+  LongName     := '';
+  Help         := '';
+  Required     := False;
+  Action       := TArgAction.Store;
+  ArgType      := TArgType.AsString;
   DefaultValue := '';
-  Choices := [];
+  Choices      := [];
 end;
 
 { TNamespace }
@@ -197,7 +202,7 @@ end;
 constructor TNamespace.Create;
 begin
   inherited Create;
-  FValues := specialize TFPGMap<string, TStringDynArray>.Create;
+  FValues := _TStringMap.Create;
 end;
 
 destructor TNamespace.Destroy;
@@ -206,31 +211,28 @@ begin
   inherited;
 end;
 
-procedure TNamespace.SetValue(const AName: string; const AValues: TStringDynArray);
+procedure TNamespace.SetValue(const AName: string; const AValues: string);
 begin
   FValues.AddOrSetData(AName, AValues);
 end;
 
 function TNamespace.Has(const AName: string): Boolean;
+var
+  Index: Integer;
 begin
-  Result := FValues.IndexOf(AName) <> -1;
-end;
-
-function TNamespace.GetAll(const AName: string): TStringDynArray;
-begin
-  if not FValues.TryGetData(AName, Result) then
-    Result := [];
+  Index  := FValues.IndexOf(AName);
+  Result := (Index <> -1) and not FValues.Data[Index].IsEmpty;
 end;
 
 function TNamespace.GetAsBoolean(const AName: string; ADefault: Boolean): Boolean;
 var
-  Value: TStringDynArray;
+  Value: String;
 begin
   if FValues.TryGetData(AName, Value) then
   begin
     if Length(Value) = 0 then
       Exit(True);
-    Result := (Value[0] <> '0') and (Value[0].ToLower <> 'false');
+    Result := (Value <> '0') and (Value.ToLower <> 'false');
   end
   else
     Result := ADefault;
@@ -238,11 +240,11 @@ end;
 
 function TNamespace.GetAsInteger(const AName: string; ADefault: Integer): Integer;
 var
-  Value: TStringDynArray;
+  Value: String;
 begin
   if FValues.TryGetData(AName, Value) and (Length(Value) > 0) then
   try
-    Result := Value[0].ToInteger;
+    Result := Value.ToInteger;
   except
     Result := ADefault;
   end
@@ -252,10 +254,10 @@ end;
 
 function TNamespace.GetAsString(const AName: string; const ADefault: string): string;
 var
-  Value: TStringDynArray;
+  Value: String;
 begin
   if FValues.TryGetData(AName, Value) and (Length(Value) > 0) then
-    Result := Value[0]
+    Result := Value
   else
     Result := ADefault;
 end;
@@ -263,14 +265,12 @@ end;
 { TArgumentParser }
 
 constructor TArgumentParser.Create(const AProgName: string);
-type
-  TArgumentList = specialize TFPGObjectList<TArgument>;
 begin
   inherited Create;
-  FParamArgs := nil;
-  FProgName := AProgName;
+  FParamArgs   := nil;
+  FProgName    := AProgName;
   FDescription := '';
-  FArgs := TArgumentList.Create;
+  FArgs        := _TArgumentList.Create;
 end;
 
 destructor TArgumentParser.Destroy;
@@ -292,16 +292,16 @@ end;
 
 function TArgumentParser.AddArgument(const AName: string; const AShort: string; const ALong: string; const AHelp: string; const ARequired: Boolean; const AAction: TArgAction; const AArgType: TArgType; const ADefault: string; const AChoices: TStringDynArray): TArgument;
 begin
-  Result := TArgument.Create(AName);
+  Result              := TArgument.Create(AName);
   FArgs.Add(Result);
-  Result.ShortName := AShort;
-  Result.LongName := ALong;
-  Result.Help := AHelp;
-  Result.Required := ARequired;
-  Result.Action := AAction;
-  Result.ArgType := AArgType;
+  Result.ShortName    := AShort;
+  Result.LongName     := ALong;
+  Result.Help         := AHelp;
+  Result.Required     := ARequired;
+  Result.Action       := AAction;
+  Result.ArgType      := AArgType;
   Result.DefaultValue := ADefault;
-  Result.Choices := Copy(AChoices);
+  Result.Choices      := Copy(AChoices);
 end;
 
 function TArgumentParser.IsFlag(const S: string): Boolean;
@@ -317,7 +317,7 @@ begin
   begin
     if (Arg.ShortName <> '') and (Arg.ShortName = AFlag) then
       Exit(Arg);
-    if (Arg.LongName <> '') and (Arg.LongName = AFlag) then
+    if (Arg.LongName <> '')  and (Arg.LongName = AFlag) then
       Exit(Arg);
   end;
   Result := nil;
@@ -336,7 +336,7 @@ begin
   try
     for Arg in FArgs do
       if Arg.DefaultValue <> '' then
-        Result.SetValue(Arg.Name, [Arg.DefaultValue]);
+        Result.SetValue(Arg.Name, Arg.DefaultValue);
 
     while i < Length(ARawArgs) do
     begin
@@ -349,7 +349,7 @@ begin
 
         if Arg.Action = TArgAction.Flag then
         begin
-          Result.SetValue(Arg.Name, []); // presence -> true
+          Result.SetValue(Arg.Name, ''); // presence -> true
           Inc(i);
           Continue;
         end;
@@ -389,7 +389,7 @@ begin
             end;
         end;
 
-        Result.SetValue(Arg.Name, [ArgValue]);
+        Result.SetValue(Arg.Name, ArgValue);
         Inc(i, 2);
         Continue;
       end
@@ -401,7 +401,7 @@ begin
           if (Arg.ShortName = '') and (Arg.LongName = '') then
             if not Result.Has(Arg.Name) then
             begin
-              Result.SetValue(Arg.Name, [Token]);
+              Result.SetValue(Arg.Name, Token);
               Found := True;
               Break;
             end;
@@ -419,7 +419,7 @@ begin
     // For flags with action store_true that were not set, put false
     for Arg in FArgs do
       if (Arg.Action = TArgAction.Flag) and not Result.Has(Arg.Name) then
-        Result.SetValue(Arg.Name, ['0']);
+        Result.SetValue(Arg.Name, '0');
   except
     Result.Free;
     raise;
