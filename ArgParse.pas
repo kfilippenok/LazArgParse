@@ -8,7 +8,15 @@ uses
 type
   {$SCOPEDENUMS ON}
 
-  TArgAction = (Store, StoreTrue);
+  TArgAction = (
+  /// <summary>
+  /// Expects a value after the flag (for example, --count 5).
+  /// </summary>
+  Store,
+  /// <summary>
+  /// A boolean flag that is set to True if present (for example, --verbose).
+  /// </summary>
+  Flag);
 
   TArgType = (AsString, AsInteger, AsBoolean);
 
@@ -24,7 +32,6 @@ type
     Action: TArgAction;
     ArgType: TArgType;
     DefaultValue: string;
-    NArgsAll: Boolean;      // if true collect remaining args
     Choices: TArray<string>;
     constructor Create(const AName: string);
   end;
@@ -47,20 +54,66 @@ type
   private
     FProgName: string;
     FDescription: string;
-    FArgs: TList<TArgument>;
+    FArgs: TObjectList<TArgument>;
     FParamArgs: TNamespace;
     procedure RaiseError(const Msg: string);
     function FindByFlag(const AFlag: string): TArgument;
     function IsFlag(const S: string): Boolean;
     function GetParamArgs: TNamespace;
   public
+    /// <param name="AProgName">
+    /// The name of the executive file for reference
+    /// </param>
     constructor Create(const AProgName: string = 'program');
     destructor Destroy; override;
+    /// <summary>
+    /// Adds a description of the use of the program
+    /// </summary>
     procedure SetDescription(const ADesc: string);
-    function AddArgument(const AName: string; const AShort: string = ''; const ALong: string = ''; AHelp: string = ''; ARequired: Boolean = False; AAction: TArgAction = TArgAction.Store; AArgType: TArgType = TArgType.AsString; const ADefault: string = ''; ANargsAll: Boolean = False; const AChoices: TArray<string> = []): TArgument;
-
+    /// <summary>
+    /// Adds a new command-line argument to the parser.
+    /// </summary>
+    /// <param name="AName">
+    /// The logical name of the argument, which is then used to retrieve the value through Namespace (for example, 'filename')
+    /// </param>
+    /// <param name="AShort">
+    /// A short flag that starts with '-', such as '-v'. It can be empty.
+    /// </param>
+    /// <param name="ALong">
+    /// A long flag that starts with '--', such as '--verbose'. It can be empty.
+    /// </param>
+    /// <param name="AHelp">
+    /// The help text displayed in the PrintHelp method.
+    /// </param>
+    /// <param name="ARequired">
+    /// The requiredness of the argument. If True and the argument is not specified, it will cause an error.
+    /// </param>
+    /// <param name="AAction">
+    /// Defines the behavior when a flag:
+    /// Store - expects a value after the flag (for example, --count 5).
+    /// Flag — a boolean flag that is set to True if present (for example, --verbose).
+    /// </param>
+    /// <param name="AArgType">
+    /// The type of the value: AsString, AsInteger, AsBoolean. It is used when reading the value.
+    /// </param>
+    /// <param name="ADefault">
+    /// The default value if the argument is not specified.
+    /// </param>
+    /// <param name="AChoices">
+    /// An array of valid values. If specified, the input is checked for matching one of the elements.
+    /// </param>
+    function AddArgument(const AName: string; const AShort: string = ''; const ALong: string = ''; const AHelp: string = ''; const ARequired: Boolean = False; const AAction: TArgAction = TArgAction.Store; const AArgType: TArgType = TArgType.AsString; const ADefault: string = ''; const AChoices: TArray<string> = []): TArgument;
+    /// <summary>
+    /// Parsing the parameter list. Returns a separate object
+    /// </summary>
     function ParseArgs(const ARawArgs: TArray<string>): TNamespace;
-    property ParamArgs: TNamespace read GetParamArgs;  // uses ParamStr/ParamCount
+    /// <summary>
+    /// Gives access to the program run parameters (ParamStr/ParamCount)
+    /// </summary>
+    property ParamArgs: TNamespace read GetParamArgs;
+    /// <summary>
+    /// Displays help on startup parameters
+    /// </summary>
     procedure PrintHelp;
   end;
 
@@ -79,7 +132,6 @@ begin
   Action := TArgAction.Store;
   ArgType := TArgType.AsString;
   DefaultValue := '';
-  NArgsAll := False;
   Choices := [];
 end;
 
@@ -156,13 +208,11 @@ begin
   FParamArgs := nil;
   FProgName := AProgName;
   FDescription := '';
-  FArgs := TList<TArgument>.Create;
+  FArgs := TObjectList<TArgument>.Create;
 end;
 
 destructor TArgumentParser.Destroy;
 begin
-  for var Arg in FArgs do
-    Arg.Free;
   FArgs.Free;
   FParamArgs.Free;
   inherited;
@@ -178,7 +228,7 @@ begin
   FDescription := ADesc;
 end;
 
-function TArgumentParser.AddArgument(const AName: string; const AShort: string; const ALong: string; AHelp: string; ARequired: Boolean; AAction: TArgAction; AArgType: TArgType; const ADefault: string; ANargsAll: Boolean; const AChoices: TArray<string>): TArgument;
+function TArgumentParser.AddArgument(const AName: string; const AShort: string; const ALong: string; const AHelp: string; const ARequired: Boolean; const AAction: TArgAction; const AArgType: TArgType; const ADefault: string; const AChoices: TArray<string>): TArgument;
 begin
   Result := TArgument.Create(AName);
   FArgs.Add(Result);
@@ -189,7 +239,6 @@ begin
   Result.Action := AAction;
   Result.ArgType := AArgType;
   Result.DefaultValue := ADefault;
-  Result.NArgsAll := ANargsAll;
   Result.Choices := Copy(AChoices);
 end;
 
@@ -228,7 +277,7 @@ begin
         if Arg = nil then
           RaiseError('Unknown option: ' + Token);
 
-        if Arg.Action = TArgAction.StoreTrue then
+        if Arg.Action = TArgAction.Flag then
         begin
           Result.SetValue(Arg.Name, []); // presence -> true
           Inc(i);
@@ -236,42 +285,43 @@ begin
         end;
 
         // store value(s)
-        if Arg.NArgsAll then
-        begin
-          var j := i + 1;
-          var Collected: TArray<string> := [];
-          while (j < Length(ARawArgs)) and (not IsFlag(ARawArgs[j])) do
-          begin
-            Collected := Collected + [ARawArgs[j]];
-            Inc(j);
-          end;
-          Result.SetValue(Arg.Name, Collected);
-          i := j;
-          Continue;
-        end
-        else
-        begin
-          if i + 1 >= Length(ARawArgs) then
-            RaiseError('Option ' + Token + ' requires a value');
+        if i + 1 >= Length(ARawArgs) then
+          RaiseError('Option ' + Token + ' requires a value');
 
-          // validate choices
-          if Length(Arg.Choices) > 0 then
-          begin
-            var Found := False;
-            for var Choise in Arg.Choices do
-              if Choise = ARawArgs[i + 1] then
-              begin
-                Found := True;
-                Break;
-              end;
-            if not Found then
-              RaiseError(Format('Value for %s not in choices', [Token]));
-          end;
+        var ArgValue := ARawArgs[i + 1];
 
-          Result.SetValue(Arg.Name, [ARawArgs[i + 1]]);
-          Inc(i, 2);
-          Continue;
+        // validate choices
+        if Length(Arg.Choices) > 0 then
+        begin
+          var Found := False;
+          for var Choise in Arg.Choices do
+            if Choise = ArgValue then
+            begin
+              Found := True;
+              Break;
+            end;
+          if not Found then
+            RaiseError(Format('Value for %s not in choices', [Token]));
         end;
+
+        // validate type
+        case Arg.ArgType of
+          TArgType.AsInteger:
+            try
+              ArgValue.ToInt64;
+            except
+              RaiseError(Format('Value for %s must be Integer', [Token]));
+            end;
+          TArgType.AsBoolean:
+            begin
+              if not TArray.Contains<string>(['true', 'false', '1', '0'], ArgValue.ToLower) then
+                RaiseError(Format('Value for %s must be Boolean', [Token]));
+            end;
+        end;
+
+        Result.SetValue(Arg.Name, [ArgValue]);
+        Inc(i, 2);
+        Continue;
       end
       else
       begin
@@ -298,7 +348,7 @@ begin
 
     // For flags with action store_true that were not set, put false
     for var Arg in FArgs do
-      if (Arg.Action = TArgAction.StoreTrue) and not Result.Has(Arg.Name) then
+      if (Arg.Action = TArgAction.Flag) and not Result.Has(Arg.Name) then
         Result.SetValue(Arg.Name, ['0']);
   except
     Result.Free;
