@@ -15,7 +15,7 @@ uses
   LazArgParse in '..\LazArgParse.pas';
 
 var
-  Parser  : TArgumentParser;
+  Parser  : IArgumentParser;
   Args    : TNamespace;
   filename: String;
   mode    : String;
@@ -59,8 +59,7 @@ begin
       ReadLn;
     end;
   end;
-  Parser.Free;
-end.    
+end.   
 ```
 
 Output
