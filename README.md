@@ -11,15 +11,15 @@ uses
   ArgParse in '..\ArgParse.pas';
 
 begin
-  var Parser := TArgumentParser.Create('example');
+  var Parser := TArgumentParser.Create('ArgParseExample.exe');
   try
     Parser.SetDescription('An example of using argparse for Delphi.');
 
     // Add args
     Parser.AddArgument('filename', '', '', 'The name of the file to process', True);
     Parser.AddArgument('count', '-c', '--count', 'Number of repetitions', False, TArgAction.Store, TArgType.AsInteger, '1');
-    Parser.AddArgument('mode', '-m', '--mode', 'Operating mode (fast|safe)', False, TArgAction.Store, TArgType.AsString, 'safe', False, ['fast', 'safe']);
-    Parser.AddArgument('verbose', '-v', '--verbose', 'Detailed output', False, TArgAction.StoreTrue, TArgType.AsBoolean);
+    Parser.AddArgument('mode', '-m', '--mode', 'Operating mode (fast|safe)', False, TArgAction.Store, TArgType.AsString, 'safe', ['fast', 'safe']);
+    Parser.AddArgument('verbose', '-v', '--verbose', 'Detailed output', False, TArgAction.Flag, TArgType.AsBoolean);
 
     // Parse param args
     var Args := Parser.ParamArgs;
@@ -46,6 +46,7 @@ begin
   Parser.Free;
   readln;
 end.
+
 
 ```
 
