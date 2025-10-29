@@ -117,7 +117,7 @@ type
     /// <summary>
     /// Displays help on startup parameters
     /// </summary>
-    procedure PrintHelp;
+    procedure PrintHelp(AReadLn: Boolean = False);
   end;
 
 implementation
@@ -387,7 +387,7 @@ begin
   Result := FParamArgs;
 end;
 
-procedure TArgumentParser.PrintHelp;
+procedure TArgumentParser.PrintHelp(AReadLn: Boolean);
 var
   Arg  : TArgument;
   Flags: String;
@@ -416,6 +416,8 @@ begin
       Help := Help + ' (' + string.Join('|', Arg.Choices) + ')';
     Writeln(Format('  %-20s %s', [Flags, Help]));
   end;
+  if AReadLn then
+    Readln;
 end;
 
 end.

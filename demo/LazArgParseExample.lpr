@@ -47,11 +47,10 @@ begin
     on E: Exception do
     begin
       Writeln(E.Message);
-      Parser.PrintHelp;   // Print help
+      Parser.PrintHelp(True);   // Print help
     end;
   end;
   Parser.Free;
-  readln;
 end.
 
 
